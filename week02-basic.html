@@ -21,44 +21,100 @@ canvas {
 <h1>두더지 잡기</h1>
 
 <p>
-점수 :
-<span id="score">0</span>
+점수 : <span id="score">0</span> | 남은 시간 : <span id="time">30</span>초
 </p>
+<button onclick="startGame()">게임 시작</button>
 
 <canvas id="gameCanvas"
         width="600"
         height="400">
 </canvas>
+
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
+        const scoreText = document.getElementById("score");
+        const timeText = document.getElementById("time");
 
         let moleX = 300;
         let moleY = 200;
         let moleRadius = 30;
 
         let score = 0;
+        let timeLeft = 30;
+        let gameRunning = false;
+        let moleSpeed = 1000;
+        let timerId;
+        let moleMoveId;
+
+        function startGame() {
+            score = 0;
+            timeLeft = 30;
+            gameRunning = true;
+
+            scoreText.textContent = score;
+            timeText.textContent = timeLeft;
+
+            clearInterval(timerId);
+            clearInterval(moleMoveId);
+
+            moveMole();
+            timerId = setInterval(() => {
+               timeLeft--; 
+               timeText.textContent = timeLeft;
+               if(timeLeft <= 0) {
+                endGame();
+               }
+            }, 1000);
+            moleMoveId = setInterval(moveMole, moleSpeed);
+        }
+
+        function endGame() {
+            gameRunning = false;
+            clearInterval(timerId);
+            clearInterval(moleMoveId);
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.font = '32px Arial';
+            ctx.fillStyle = "black";
+            ctx.textAlign = "center";
+            ctx.fillText("게임 종료!", canvas.width / 2, 180);
+            ctx.fillText("최종 점수: " + score, canvas.width / 2, 230);
+        }
 
         function drawMole() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.beginPath();
             ctx.arc(moleX, moleY, moleRadius, 0, Math.PI * 2);
-            ctx.fillstyle = "brown";
+            ctx.fillStyle = "brown";
             ctx.fill();
         }
-        // drawMole();
 
         function moveMole() {
             moleX = Math.random() * (canvas.width - 80) + 40;
             moleY = Math.random() * (canvas.height - 80) + 40;
             drawMole();
         }
-        setInterval(moveMole, 1000);
 
         canvas.addEventListener("click", function (event) {
+            if (!gameRunning) return;
+
             const rect = canvas.getBoundingClientRect();
             const mouseX = event.clientX - rect.left;
             const mouseY = event.clientY - rect.top;
+
+            const dx = mouseX - moleX;
+            const dy = mouseY - moleY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance <= moleRadius) {
+                score++;
+                document.getElementById("score").textContent = score;
+                moveMole();
+            } else {
+                score--;
+                document.getElementById("score").textContent = score;
+            }
         });
     </script>
 
