@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>공 잡기 게임</title>
+
+<style>
+body{
+    text-align:center;
+    font-family:Arial;
+}
+
+canvas{
+    border:2px solid black;
+}
+</style>
+
+</head>
+<body>
+
+<h1>공 잡기 게임</h1>
+
+<p>
+점수 : <span id="score">0</span> |
+남은 시간 : <span id="time">30</span>초 | 
+속도 : <span id="speed">1</span> 단계
+</p>
+<button onclick="startGame()">게임 시작</button><br><br>
+
+<canvas
+    id="gameCanvas"
+    width="600"
+    height="400">
+</canvas>
+
+<script> 
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const scoreText = document.getElementById("score");
+    let score = 0;
+    const speedText = document.getElementById("speed");
+    let speedLevel = 1;
+    const timeText = document.getElementById("time");
+
+    let timeLeft = 30;
+    let gameRunning = false;
+    let timerId = null;
+    let animId = null;
+    
+    // 기본 공 크기(반지름) 40으로 조정
+    const ball = {
+        x: 300, y: 200, radius: 40, dx: 3, dy: 2
+    };
+
+    function startGame() {
+        if (animId) {
+            cancelAnimationFrame(animId);
+        }
+        if (timerId) {
+            clearInterval(timerId);
+        }
+
+        score = 0;
+        timeLeft = 30;
+        speedLevel = 1;
+
+        // UI 초기화
+        scoreText.textContent = score;
+        speedText.textContent = speedLevel;
+        timeText.textContent = timeLeft;
+
+        // 공 상태 및 반지름 초기화
+        ball.radius = 100;
+        ball.x = 300;
+        ball.y = 200;
+        ball.dx = 3;
+        ball.dy = 2;
+
+        gameRunning = true;
+
+        timerId = setInterval(() => {
+            timeLeft--;
+            if (timeLeft <= 0) {
+                timeLeft = 0;
+                timeText.textContent = timeLeft;
+                endGame(); // 0초 시 endGame 호출
+            } else {
+                timeText.textContent = timeLeft;
+            }
+        }, 1000);
+        
+        drawGame();
+    }
+
+    function endGame(){
+        gameRunning = false; // 1. 게임 실행 상태 종료
+
+        // 2. 진행 중인 타이머와 애니메이션 루프 완벽 차단
+        if (timerId) {
+            clearInterval(timerId);
+            timerId = null;
+        }
+        if (animId) {
+            cancelAnimationFrame(animId);
+            animId = null;
+        }
+
+        // 3. 화면 초기화 후 종료 텍스트 표시
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.font = "32px Arial";
+        ctx.fillStyle = "black";
+        ctx.textAlign = "center";
+        ctx.fillText("게임 종료!", canvas.width / 2, canvas.height / 2 - 30);
+        ctx.fillText("최종 점수 : " + score, canvas.width / 2, canvas.height / 2 + 30);
+    }
+
+    function drawBall() {
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        ctx.fillStyle = "tomato";
+        ctx.fill();
+    }
+
+    function updateBall() {
+        ball.x += ball.dx;
+        ball.y -= ball.dy;
+
+        if (ball.x + ball.radius > canvas.width || ball.x - ball.radius < 0){
+            ball.dx = -ball.dx;
+        }
+        if (ball.y + ball.radius > canvas.height || ball.y - ball.radius < 0){
+            ball.dy = -ball.dy;
+        }
+    }
+
+    function drawGame() {
+        // 🔥 핵심: 게임 중이 아니면 캔버스를 그리지 않고 즉시 멈춤
+        if (!gameRunning) return;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawBall();
+        updateBall();
+        animId = requestAnimationFrame(drawGame);
+    }
+
+    canvas.addEventListener("click", function(event) {
+        if (!gameRunning) return; // 게임 시작 전/종료 후 클릭 방지
+
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = event.clientX - rect.left;
+        const mouseY = event.clientY - rect.top;
+
+        const dx = mouseX - ball.x;
+        const dy = mouseY - ball.y;
+
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance <= ball.radius) {
+            score++;
+            scoreText.textContent = score;
+            speedLevel++;
+            speedText.textContent = speedLevel;
+
+            ball.radius = Math.max(15, ball.radius - 3);
+
+            if (ball.dx > 0) {
+                ball.dx += 0.5;
+            } else {
+                ball.dx -= 0.5;
+            }
+            if (ball.dy > 0) {
+                ball.dy += 0.5;
+            } else {
+                ball.dy -= 0.5;
+            }
+            moveBallRandom();
+        }
+    });
+
+    function moveBallRandom() {
+        ball.x = Math.random() * (canvas.width - ball.radius * 2) + ball.radius;
+        ball.y = Math.random() * (canvas.height - ball.radius * 2) + ball.radius;
+    }
+</script>
+</body>
+</html>
