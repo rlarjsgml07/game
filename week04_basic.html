@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Pong 게임</title>
+
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+        }
+
+        canvas {
+            border: 2px solid black;
+            background: #111;
+        }
+
+        /* 게임 종료 UI 스타일 */
+        #gameOverScreen {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        #gameOverScreen h2 {
+            margin-top: 0;
+            font-size: 32px;
+        }
+
+        .restart-btn {
+            padding: 10px 20px;
+            font-size: 18px;
+            cursor: pointer;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            margin-top: 15px;
+        }
+
+        .restart-btn:hover {
+            background: #45a049;
+        }
+
+        #container {
+            position: relative;
+            display: inline-block;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Pong 게임</h1>
+    <p>왼쪽 플레이어: W / S | 목표: 10점 선승</p>
+    <p>왼쪽 점수: <span id="leftScore">0</span> | 오른쪽 점수: <span id="rightScore">0</span></p>
+
+    <div id="container">
+        <canvas id="gameCanvas" width="700" height="400"></canvas>
+        
+        <!-- 게임 종료 팝업 -->
+        <div id="gameOverScreen">
+            <h2 id="winnerText"></h2>
+            <button class="restart-btn" onclick="restartGame()">다시 시작</button>
+        </div>
+    </div>
+
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const leftScoreText = document.getElementById("leftScore");
+    const rightScoreText = document.getElementById("rightScore");
+    const gameOverScreen = document.getElementById("gameOverScreen");
+    const winnerText = document.getElementById("winnerText");
+
+    let leftScore = 0;
+    let rightScore = 0;
+    const WINNING_SCORE = 10; // 목표 점수: 10점
+    let isGameOver = false;
+
+    // 기본 속도 변수
+    const BASE_BALL_SPEED = 3;
+    const BASE_AI_SPEED = 1;
+    let rallySpeedBonus = 0; // 랠리가 길어질 때 가산되는 공 속도
+
+    // 현재 플레이어 점수 및 랠리 보너스에 맞춰 전체 속도 계산
+    function getCurrentBallSpeed() {
+        return BASE_BALL_SPEED + (leftScore * 0.3) + rallySpeedBonus;
+    }
+
+    function getCurrentAISpeed() {
+        return BASE_AI_SPEED + (leftScore + 0.25);
+    }
+
+    function drawCenterLine() {
+        ctx.setLineDash([10, 10]);
+        ctx.beginPath();
+        ctx.moveTo(canvas.width / 2, 0);
+        ctx.lineTo(canvas.width / 2, canvas.height);
+        ctx.strokeStyle = "white";
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    const ball = {
+        x: canvas.width / 2,
+        y: canvas.height / 2,
+        radius: 10,
+        dx: BASE_BALL_SPEED,
+        dy: 1
+    };
+
+    function drawBall() {
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        ctx.fillStyle = "white";
+        ctx.fill();
+    }
+
+    function moveBall() {
+        if (isGameOver) return;
+
+        ball.x += ball.dx;
+        ball.y += ball.dy;
+
+        // 위아래 벽 충돌
+        if (ball.y - ball.radius < 0 || ball.y + ball.radius > canvas.height) {
+            ball.dy *= -1;
+        }
+
+        // 왼쪽 벽 통과 (오른쪽 AI 득점)
+        if (ball.x - ball.radius < 0) {
+            rightScore++;
+            rightScoreText.textContent = rightScore;
+            checkGameOver();
+            if (!isGameOver) resetBall();
+        }
+
+        // 오른쪽 벽 통과 (왼쪽 플레이어 득점)
+        if (ball.x + ball.radius > canvas.width) {
+            leftScore++;
+            leftScoreText.textContent = leftScore;
+            checkGameOver();
+            if (!isGameOver) resetBall();
+        }
+
+        // 왼쪽 패들 충돌
+        if (isBallHitPaddle(leftPaddle)) {
+            handlePaddleBounce(leftPaddle, true);
+        }
+        // 오른쪽 패들 충돌
+        if (isBallHitPaddle(rightPaddle)) {
+            handlePaddleBounce(rightPaddle, false);
+        }
+    }
+
+    // 승리/패배 체크 (10점 기준)
+    function checkGameOver() {
+        if (leftScore >= WINNING_SCORE) {
+            isGameOver = true;
+            winnerText.textContent = "🏆 축하합니다! 당신의 승리입니다!";
+            winnerText.style.color = "#4CAF50";
+            gameOverScreen.style.display = "block";
+        } else if (rightScore >= WINNING_SCORE) {
+            isGameOver = true;
+            winnerText.textContent = "💀 AI의 승리! 게임 오버";
+            winnerText.style.color = "#F44336";
+            gameOverScreen.style.display = "block";
+        }
+    }
+
+    // 패들 충돌 시 각도 및 랠리 속도 가산 처리
+    function handlePaddleBounce(paddle, isLeft) {
+        // 패들에 닿을 때마다 랠리 보너스 속도 0.4씩 증가
+        rallySpeedBonus += 0.4;
+
+        const paddleCenter = paddle.y + paddle.height / 2;
+        const hitPosition = (ball.y - paddleCenter) / (paddle.height / 2);
+        
+        const maxAngle = Math.PI / 4; 
+        const bounceAngle = hitPosition * maxAngle;
+        
+        // 점수 난이도 + 랠리 속도가 합산된 속도 적용
+        const currentSpeed = getCurrentBallSpeed();
+        const direction = isLeft ? 1 : -1;
+        
+        ball.dx = direction * currentSpeed * Math.cos(bounceAngle);
+        ball.dy = currentSpeed * Math.sin(bounceAngle);
+
+        if (isLeft) {
+            ball.x = paddle.x + paddle.width + ball.radius;
+        } else {
+            ball.x = paddle.x - ball.radius;
+        }
+    }
+
+    function isBallHitPaddle(paddle) {
+        return (
+            ball.x - ball.radius < paddle.x + paddle.width &&
+            ball.x + ball.radius > paddle.x &&
+            ball.y + ball.radius > paddle.y &&
+            ball.y - ball.radius < paddle.y + paddle.height
+        );
+    }
+
+    const keys = {};
+
+    document.addEventListener("keydown", function (event) {
+        keys[event.key] = true;
+    });
+    document.addEventListener("keyup", function (event) {
+        keys[event.key] = false;
+    });
+
+    function movePaddles() {
+        if (isGameOver) return;
+
+        if (keys["w"] || keys["W"]) {
+            leftPaddle.y -= leftPaddle.speed;
+        }
+        if (keys["s"] || keys["S"]) {
+            leftPaddle.y += leftPaddle.speed;
+        }
+        keepPaddleInside(leftPaddle);
+    }
+
+    function moveAI() {
+        if (isGameOver) return;
+
+        const aiCenter = rightPaddle.y + rightPaddle.height / 2;
+        const aiSpeed = getCurrentAISpeed();
+        
+        if (ball.y < aiCenter - 5) {
+            rightPaddle.y -= aiSpeed;
+        } else if (ball.y > aiCenter + 5) {
+            rightPaddle.y += aiSpeed;
+        }
+        keepPaddleInside(rightPaddle);
+    }
+
+    function keepPaddleInside(paddle) {
+        if (paddle.y < 0) {
+            paddle.y = 0;
+        }
+        if (paddle.y + paddle.height > canvas.height) {
+            paddle.y = canvas.height - paddle.height;
+        }
+    }
+
+    function resetBall() {
+        // 라운드가 끝나면 랠리 보너스 속도 초기화
+        rallySpeedBonus = 0;
+
+        ball.x = canvas.width / 2;
+        ball.y = canvas.height / 2;
+        
+        const currentSpeed = getCurrentBallSpeed();
+        const direction = ball.dx > 0 ? -1 : 1;
+        const randomAngle = (Math.random() * 0.8 - 0.4);
+
+        ball.dx = direction * currentSpeed * Math.cos(randomAngle);
+        ball.dy = currentSpeed * Math.sin(randomAngle);
+    }
+
+    function restartGame() {
+        leftScore = 0;
+        rightScore = 0;
+        leftScoreText.textContent = leftScore;
+        rightScoreText.textContent = rightScore;
+        isGameOver = false;
+        gameOverScreen.style.display = "none";
+        
+        leftPaddle.y = canvas.height / 2 - paddleHeight / 2;
+        rightPaddle.y = canvas.height / 2 - paddleHeight / 2;
+        
+        resetBall();
+    }
+
+    const paddleWidth = 12;
+    const paddleHeight = 80;
+
+    const leftPaddle = {
+        x: 30,
+        y: canvas.height / 2 - paddleHeight / 2,
+        width: paddleWidth,
+        height: paddleHeight,
+        speed: 7
+    };
+
+    const rightPaddle = {
+        x: canvas.width - 30 - paddleWidth,
+        y: canvas.height / 2 - paddleHeight / 2,
+        width: paddleWidth,
+        height: paddleHeight,
+        speed: 6
+    };
+
+    function drawRect(rect) {
+        ctx.fillStyle = "white";
+        ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+    }
+
+    function drawGame() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawCenterLine();
+        moveBall();
+        drawBall();
+        movePaddles();
+        moveAI();
+        drawRect(leftPaddle);
+        drawRect(rightPaddle);
+        requestAnimationFrame(drawGame);
+    }
+
+    drawGame();
+</script>
+</body>
+
+</html>
