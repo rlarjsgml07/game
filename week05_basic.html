@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>벽돌깨기 게임</title>
+
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial;
+        }
+
+        canvas {
+            border: 2px solid black;
+            background: #f9f9f9;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>벽돌깨기 게임</h1>
+
+    <p>
+        점수: <span id="score">0</span> |
+        목숨: <span id="lives">3</span>
+    </p>
+
+    <p>조작: ← / → 방향키</p>
+
+    <canvas id="gameCanvas" width="600" height="400"></canvas>
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const scoreText = document.getElementById("score");
+    const livesText = document.getElementById("lives");
+
+    let score = 0;
+    let lives = 3;
+
+    const paddle = {
+        x: canvas.width / 2 - 50,
+        y: canvas.height - 30,
+        width: 100,
+        height: 12,
+        speed: 7
+    }
+
+    function drawPaddle() {
+        ctx.fillStyle = "#333";
+        ctx.fillRect(paddle.x, paddle.y, paddle.width, paddle.height);
+    }
+
+    const keys = {}
+
+    document.addEventListener("keydown", function (event) {
+        keys[event.key] = true;
+    });
+
+    document.addEventListener("keyup", function (event) {
+        keys[event.key] = false;
+    });
+
+    function movePaddle() {
+        if (keys["ArrowLeft"]) {
+            paddle.x -= paddle.speed;
+        }
+        if (keys["ArrowRight"]) {
+            paddle.x += paddle.speed;
+        }
+        if(paddle.x < 0) {
+            paddle.x = 0;
+        }
+        if(paddle.x + paddle.width > canvas.width) {
+            paddle.x = canvas.width - paddle.width;
+        }
+    }
+    const ball = {
+        x: canvas.width / 2,
+        y: canvas.height - 50,
+        radius: 8,
+        dx: 4,
+        dy: -4
+    }
+
+    function drawBall() {
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        ctx.fillStyle = "tomato";
+        ctx.fill();
+    }
+
+    function moveBall() {
+        if(isGameOver) return;
+        ball.x += ball.dx;
+        ball.y += ball.dy;
+
+        if (ball.x - ball.radius < 0 || ball.x + ball.radius > canvas.width) {
+            ball.dx *= -1;
+        }
+
+        if(ball.y - ball.radius < 0) {
+            ball.dy *= -1;
+        }
+
+        if (
+            ball.x + ball.radius > paddle.x &&
+            ball.x - ball.radius < paddle.x + paddle.width &&
+            ball.y + ball.radius > paddle.y &&
+            ball.y - ball.radius < paddle.y + paddle.height
+        ) {
+            ball.dy = -Math.abs(ball.dy);
+        }
+
+        if(ball.y - ball.radius > canvas.height) {
+            lives--;
+            livesText.textContent = lives;
+
+            if(lives <= 0) {
+                isGameOver = true;
+                gameOver();
+            } else {
+                resetBallAndPaddle();
+            }
+        }
+    }
+
+    let isGameOver = false;
+
+    function resetBallAndPaddle() {
+        paddle.x = canvas.width / 2 - paddle.width / 2;
+        ball.x = canvas.width / 2;
+        ball.y = canvas.height - 50;
+        ball.dx = 4;
+        ball.dy = -4;
+    }
+
+    const brick = {
+        row: 4,
+        column: 8,
+        width: 60,
+        height: 20,
+        padding: 10,
+        offsetTop: 40,
+        offsetLeft: 25,
+    };
+
+    // 각 줄(행)별 색상 및 점수 설정 변경
+    const rowConfig = [
+        { color: "#e74c3c", score: 4 }, // 1번째 줄: 빨간색, 4점
+        { color: "#e67e22", score: 3 }, // 2번째 줄: 주황색, 3점
+        { color: "#2ecc71", score: 2 }, // 3번째 줄: 초록색, 2점
+        { color: "#3498db", score: 1 }  // 4번째 줄: 파란색, 1점
+    ];
+
+    const bricks = [];
+    let brokenBricksCount = 0;
+
+    for (let r = 0; r < brick.row; r++) {
+        bricks[r] = [];
+        for(let c = 0; c < brick.column; c++) {
+            bricks[r][c] = {
+                x: 0,
+                y: 0,
+                visible: true
+            };
+        }
+    }
+
+    function gameOver() {
+        alert("게임 오버!");
+        document.location.reload();
+    }
+
+    function drawBricks() {
+        for (let r = 0; r < brick.row; r++) {
+            for( let c = 0; c < brick.column; c++) {
+                const b = bricks[r][c];
+
+                if(b.visible) {
+                    const brickX = c * (brick.width + brick.padding) + brick.offsetLeft;
+                    const brickY = r * (brick.height + brick.padding) + brick.offsetTop;
+
+                    b.x = brickX;
+                    b.y = brickY;
+
+                    ctx.fillStyle = rowConfig[r].color;
+                    ctx.fillRect(brickX, brickY, brick.width, brick.height);
+                }
+            }
+        }
+    }
+
+    function checkBrickCollision() {
+        for (let r = 0; r < brick.row; r++) {
+            for (let c = 0; c < brick.column; c++) {
+                const b = bricks[r][c];
+
+                if(b.visible) {
+                    if(
+                        ball.x + ball.radius > b.x &&
+                        ball.x - ball.radius < b.x + brick.width &&
+                        ball.y + ball.radius > b.y &&
+                        ball.y - ball.radius < b.y + brick.height
+                    ) {
+                        ball.dy *= -1;
+                        b.visible = false;
+                        
+                        score += rowConfig[r].score;
+                        scoreText.textContent = score;
+                        
+                        brokenBricksCount++;
+                        if(brokenBricksCount === brick.row * brick.column) {
+                            gameClear();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    function gameClear() {
+        alert("축하합니다! 모든 벽돌을 깼습니다!");
+        document.location.reload();
+    }
+
+    function drawGame() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawPaddle();
+        movePaddle(); 
+
+        drawBall();
+        moveBall();
+
+        drawBricks();
+        checkBrickCollision();
+            
+        requestAnimationFrame(drawGame);
+    }
+
+    drawGame();
+</script>
+
+</body>
+
+</html>
