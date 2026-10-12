@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Snake 게임</title>
+
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+
+        #game-container {
+            position: relative;
+            display: inline-block;
+        }
+
+        canvas {
+            border: 2px solid black;
+            background: #f9f9f9;
+            display: block;
+        }
+
+
+        #restartBtn {
+            position: absolute;
+            top: 65%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 12px 24px;
+            font-size: 18px;
+            font-weight: bold;
+            color: white;
+            background-color: #4CAF50;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            display: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        #restartBtn:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Snake 게임</h1>
+    <p>점수: <span id="score">0</span></p>
+    <p>조작: 방향키 ↑ ↓ ← → (보라색 독사과를 피하세요!)</p>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+        <button id="restartBtn" onclick="resetGame()">다시 시작</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        const scoreText = document.getElementById("score");
+        const restartBtn = document.getElementById("restartBtn");
+
+        const gridSize = 20;
+        const tileCount = canvas.width / gridSize;
+
+        
+        let score = 0;
+        let snake = [];
+        let food = { x: 5, y: 5 };
+        let poisonFoods = [];
+        let dx = 1;
+        let dy = 0;
+        let nextDx = 1;
+        let nextDy = 0;
+        let gameOver = false;
+
+        
+        let speed = 120;
+        const minSpeed = 40;
+        let gameInterval = null;
+        let poisonTimer = null; 
+
+        function drawTile(x, y, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x * gridSize, y * gridSize, gridSize - 2, gridSize - 2);
+        }
+
+        function drawSnake() {
+            for (let i = 0; i < snake.length; i++) {
+                if (i === 0) {
+                    drawTile(snake[i].x, snake[i].y, "green");
+                } else {
+                    drawTile(snake[i].x, snake[i].y, "limegreen");
+                }
+            }
+        }
+
+        function drawFood() {
+            drawTile(food.x, food.y, "red"); 
+        }
+
+        function drawPoisonFoods() {
+            for (let p of poisonFoods) {
+                drawTile(p.x, p.y, "purple"); 
+            }
+        }
+
+        document.addEventListener("keydown", changeDirection);
+
+        function changeDirection(event) {
+            if (event.key === "ArrowUp" && dy !== 1) {
+                nextDx = 0;
+                nextDy = -1;
+            }
+            if (event.key === "ArrowDown" && dy !== -1) {
+                nextDx = 0;
+                nextDy = 1;
+            }
+            if (event.key === "ArrowLeft" && dx !== 1) {
+                nextDx = -1;
+                nextDy = 0;
+            }
+            if (event.key === "ArrowRight" && dx !== -1) {
+                nextDx = 1;
+                nextDy = 0;
+            }
+        }
+
+        function moveSnake() {
+            dx = nextDx;
+            dy = nextDy;
+
+            const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+
+            snake.unshift(head);
+
+            
+            if (head.x === food.x && head.y === food.y) {
+                score++;
+                scoreText.textContent = score;
+                moveFood();
+                increaseSpeed();
+            } else {
+                snake.pop();
+            }
+        }
+
+        function increaseSpeed() {
+            if (speed > minSpeed) {
+                speed -= 3;
+                clearInterval(gameInterval);
+                gameInterval = setInterval(gameLoop, speed);
+            }
+        }
+
+        
+        function moveFood() {
+            let validPosition = false;
+
+            while (!validPosition) {
+                food.x = Math.floor(Math.random() * tileCount);
+                food.y = Math.floor(Math.random() * tileCount);
+
+               
+                const onSnake = snake.some(segment => segment.x === food.x && segment.y === food.y);
+               
+                const onPoison = poisonFoods.some(p => p.x === food.x && p.y === food.y);
+
+                validPosition = !onSnake && !onPoison;
+            }
+        }
+
+        
+        function spawnPoisonFoods() {
+            if (gameOver) return;
+
+            poisonFoods = []; 
+
+            for (let i = 0; i < 2; i++) {
+                let validPosition = false;
+                let newPoison = { x: 0, y: 0 };
+
+                while (!validPosition) {
+                    newPoison.x = Math.floor(Math.random() * tileCount);
+                    newPoison.y = Math.floor(Math.random() * tileCount);
+
+                    
+                    const onSnake = snake.some(segment => segment.x === newPoison.x && segment.y === newPoison.y);
+                   
+                    const onFood = (newPoison.x === food.x && newPoison.y === food.y);
+                    
+                    const onOtherPoison = poisonFoods.some(p => p.x === newPoison.x && p.y === newPoison.y);
+
+                    validPosition = !onSnake && !onFood && !onOtherPoison;
+                }
+
+                poisonFoods.push(newPoison);
+            }
+        }
+
+        function checkCollision() {
+            const head = snake[0];
+
+            
+            if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
+                endGame();
+                return;
+            }
+
+            
+            for (let i = 1; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
+                    endGame();
+                    return;
+                }
+            }
+
+            
+            for (let p of poisonFoods) {
+                if (head.x === p.x && head.y === p.y) {
+                    endGame();
+                    return;
+                }
+            }
+        }
+
+        function endGame() {
+            gameOver = true;
+            clearInterval(gameInterval);
+            clearInterval(poisonTimer); 
+
+            ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.font = "32px Arial";
+            ctx.fillStyle = "white";
+            ctx.textAlign = "center";
+            ctx.fillText("게임 오버!", canvas.width / 2, canvas.height / 2 - 40);
+            ctx.fillText("점수 : " + score, canvas.width / 2, canvas.height / 2 + 10);
+
+            restartBtn.style.display = "block";
+        }
+
+        function gameLoop() {
+            if (gameOver) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            moveSnake();
+            checkCollision();
+
+            if (!gameOver) {
+                drawSnake();
+                drawFood();
+                drawPoisonFoods();
+            }
+        }
+
+        function resetGame() {
+            score = 0;
+            speed = 120;
+            dx = 1;
+            dy = 0;
+            nextDx = 1;
+            nextDy = 0;
+            gameOver = false;
+            snake = [{ x: 10, y: 10 }];
+            poisonFoods = [];
+
+            scoreText.textContent = score;
+            restartBtn.style.display = "none";
+
+            moveFood();
+            spawnPoisonFoods(); 
+
+            if (gameInterval) clearInterval(gameInterval);
+            if (poisonTimer) clearInterval(poisonTimer);
+
+            gameInterval = setInterval(gameLoop, speed);
+            poisonTimer = setInterval(spawnPoisonFoods, 6000); 
+        }
+
+        
+        resetGame();
+    </script>
+
+</body>
+
+</html>
