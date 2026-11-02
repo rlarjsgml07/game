@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>슈팅게임</title>
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial;
+        }
+
+        canvas {
+            border: 2px solid black;
+            background: #111;
+        }
+
+        #restartBtn {
+            display: none;
+            margin: 15px auto 0;
+            padding: 10px 25px;
+            font-size: 16px;
+            font-weight: bold;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        #restartBtn:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Space Shooter</h1>
+    <p>점수: <span id="score">0</span> | 생명: <span id="life">10</span></p>
+    <p>조작: ← / → 이동, Space 발사</p>
+    <canvas id="gameCanvas" width="600" height="400"></canvas>
+    <br>
+    <button id="restartBtn">다시 시작</button>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        const scoreText = document.getElementById("score");
+        const lifeText = document.getElementById("life");
+        const restartBtn = document.getElementById("restartBtn");
+
+        let score = 0;
+        let life = 10;
+        let gameOver = false;
+
+        let nextBossScore = 50;
+        let boss = null;
+
+        const player = {
+            x: 280,
+            y: 340,
+            width: 40,
+            height: 40,
+            speed: 6
+        };
+
+        function drawPlayer() {
+            ctx.fillStyle = "deepskyblue";
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            ctx.fillStyle = "white";
+            ctx.fillRect(player.x + 15, player.y - 10, 10, 10);
+        }
+
+        const keys = {};
+
+        document.addEventListener("keydown", function (event) {
+            keys[event.code] = true;
+            if (event.code === "Space" && !gameOver) {
+                shootBullet();
+            }
+        });
+
+        document.addEventListener("keyup", function (event) {
+            keys[event.code] = false;
+        });
+
+        function movePlayer() {
+            if (keys["ArrowLeft"]) { 
+                player.x -= player.speed;
+            }
+            if (keys["ArrowRight"]) {
+                player.x += player.speed;
+            }
+            if (player.x < 0) {
+                player.x = 0;
+            }
+            if (player.x + player.width > canvas.width) {
+                player.x = canvas.width - player.width;
+            }
+        }
+
+        const bullets = [];
+
+        function shootBullet() {
+            bullets.push({
+                x : player.x + player.width/2 - 3,
+                y : player.y,
+                width : 6,
+                height : 12,
+                speed : 7
+            });
+        }
+
+        function drawBullet() {
+            ctx.fillStyle = "yellow";
+
+            for(let bullet of bullets) {
+                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+            }
+        }
+
+        function moveBullets() {
+            for(let bullet of bullets) {
+                bullet.y -= bullet.speed;
+            }
+
+            for(let i = bullets.length - 1; i >= 0; i--) {
+                if(bullets[i].y + bullets[i].height < 0){
+                    bullets.splice(i, 1);
+                }
+            }
+        }
+
+        const enemies = [];
+
+        function createEnemy() {
+            if (boss || gameOver) return;
+
+            const rand = Math.random();
+            let hp = 1;
+            let color = "crimson";
+            let speed = Math.random() * 1.2 + 1.5;
+            let scoreValue = 1;
+
+            if (rand < 0.2) {
+                hp = 5;
+                color = "dodgerblue";
+                speed = Math.random() * 0.8 + 0.8;
+                scoreValue = 3;
+            } else if (rand < 0.5) {
+                hp = 3;
+                color = "limegreen";
+                speed = Math.random() * 1.0 + 1.1;
+                scoreValue = 2;
+            }
+
+            enemies.push({
+                x : Math.random() * (canvas.width - 40),
+                y : -40,
+                width : 40,
+                height : 40,
+                speed : speed,
+                hp : hp,
+                color : color,
+                scoreValue : scoreValue
+            });
+        }
+
+        const bossBullets = [];
+
+        function shootBossBullet() {
+            if (!boss || gameOver) return;
+
+            const centerX = boss.x + boss.width / 2 - 4;
+            const startY = boss.y + boss.height;
+
+            bossBullets.push(
+                { x: centerX, y: startY, width: 8, height: 16, vx: -1.5, vy: 4 },
+                { x: centerX, y: startY, width: 8, height: 16, vx: 0, vy: 4 },
+                { x: centerX, y: startY, width: 8, height: 16, vx: 1.5, vy: 4 }
+            );
+        }
+
+        function drawBossBullets() {
+            ctx.fillStyle = "orange";
+            for (let b of bossBullets) {
+                ctx.fillRect(b.x, b.y, b.width, b.height);
+            }
+        }
+
+        function moveBossBullets() {
+            for (let b of bossBullets) {
+                b.x += b.vx;
+                b.y += b.vy;
+            }
+            for (let i = bossBullets.length - 1; i >= 0; i--) {
+                if (bossBullets[i].y > canvas.height || bossBullets[i].x < -10 || bossBullets[i].x > canvas.width + 10) {
+                    bossBullets.splice(i, 1);
+                }
+            }
+        }
+
+        function checkPlayerBossBulletCollision() {
+            for (let i = bossBullets.length - 1; i >= 0; i--) {
+                const b = bossBullets[i];
+                if (player.x < b.x + b.width &&
+                    player.x + player.width > b.x &&
+                    player.y < b.y + b.height &&
+                    player.y + player.height > b.y) {
+                    
+                    bossBullets.splice(i, 1);
+                    life--;
+                    lifeText.textContent = life;
+
+                    if (life <= 0) {
+                        endGame();
+                    }
+                }
+            }
+        }
+
+        function spawnBoss(hpValue) {
+            enemies.length = 0;
+            bossBullets.length = 0;
+            boss = {
+                x: canvas.width / 2 - 50,
+                y: 30,
+                width: 100,
+                height: 50,
+                dx: 2,
+                hp: hpValue,
+                maxHp: hpValue,
+                color: "purple"
+            };
+        }
+
+        function drawBoss() {
+            if (!boss) return;
+
+            ctx.fillStyle = boss.color;
+            ctx.fillRect(boss.x, boss.y, boss.width, boss.height);
+
+            ctx.fillStyle = "gray";
+            ctx.fillRect(boss.x, boss.y - 15, boss.width, 8);
+
+            ctx.fillStyle = "red";
+            ctx.fillRect(boss.x, boss.y - 15, (boss.hp / boss.maxHp) * boss.width, 8);
+
+            ctx.fillStyle = "white";
+            ctx.font = "bold 14px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText("BOSS (" + boss.hp + "/" + boss.maxHp + ")", boss.x + boss.width / 2, boss.y + 30);
+        }
+
+        function moveBoss() {
+            if (!boss) return;
+
+            boss.x += boss.dx;
+            if (boss.x <= 0 || boss.x + boss.width >= canvas.width) {
+                boss.dx *= -1;
+            }
+        }
+
+        function drawEnemies() {
+            for(let enemy of enemies) {
+                ctx.fillStyle = enemy.color;
+                ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+            }
+        }
+
+        function moveEnemies() {
+            for(let enemy of enemies) {
+                enemy.y += enemy.speed;
+            }
+            for(let i = enemies.length - 1; i >= 0; i--) {
+                if(enemies[i].y > canvas.height) {
+                    enemies.splice(i, 1);
+
+                    life--;
+                    lifeText.textContent = life;
+
+                    if(life <= 0) {
+                        endGame();
+                    }
+                }
+            }
+        }
+
+        function checkBulletEnemyCollision() {
+            for(let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                for(let j = bullets.length - 1; j >= 0; j--) {
+                    const bullet = bullets[j];
+
+                    if(bullet.x < enemy.x + enemy.width &&
+                        bullet.x + bullet.width > enemy.x &&
+                        bullet.y < enemy.y + enemy.height &&
+                        bullet.y + bullet.height > enemy.y
+                    ) {
+                        bullets.splice(j, 1);
+                        enemy.hp--;
+
+                        if (enemy.hp <= 0) {
+                            enemies.splice(i, 1);
+                            score += enemy.scoreValue;
+                            scoreText.textContent = score;
+                            checkBossSpawn();
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        function checkBulletBossCollision() {
+            if (!boss) return;
+
+            for(let j = bullets.length - 1; j >= 0; j--) {
+                const bullet = bullets[j];
+
+                if(bullet.x < boss.x + boss.width &&
+                    bullet.x + bullet.width > boss.x &&
+                    bullet.y < boss.y + boss.height &&
+                    bullet.y + bullet.height > boss.y // enemy.y -> boss.y 수정됨
+                ) {
+                    bullets.splice(j, 1);
+                    boss.hp--;
+
+                    if (boss.hp <= 0) {
+                        score += 10;
+                        life += 5;
+                        scoreText.textContent = score;
+                        lifeText.textContent = life;
+                        
+                        boss = null;
+                        bossBullets.length = 0;
+                        checkBossSpawn();
+                        break;
+                    }
+                }
+            }
+        }
+
+        function checkBossSpawn() {
+            if (!boss && score >= nextBossScore) {
+                spawnBoss(nextBossScore);
+                nextBossScore += 50;
+            }
+        }
+
+        function checkPlayerEnemyCollision() {
+            for(let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                if(player.x < enemy.x + enemy.width &&
+                    player.x + player.width > enemy.x &&
+                    player.y < enemy.y + enemy.height &&
+                    player.y + player.height > enemy.y) {
+                        enemies.splice(i, 1);
+
+                        life--;
+                        lifeText.textContent = life;
+                        if(life <= 0) {
+                            endGame();
+                        }
+                    }
+            }
+        }
+
+        function checkPlayerBossCollision() {
+            if (!boss) return;
+
+            if(player.x < boss.x + boss.width &&
+                player.x + player.width > boss.x &&
+                player.y < boss.y + boss.height &&
+                player.y + player.height > boss.y) {
+                    
+                    life -= 2;
+                    if (life < 0) life = 0;
+                    lifeText.textContent = life;
+
+                    player.y = 340;
+
+                    if(life <= 0) {
+                        endGame();
+                    }
+                }
+        }
+
+        function endGame() {
+            gameOver = true;
+
+            ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.font = "32px Arial";
+            ctx.fillStyle = "white";
+            ctx.textAlign = "center";
+
+            ctx.fillText("게임 오버!", canvas.width / 2, canvas.height / 2 - 20);
+            ctx.fillText("최종 점수 : " + score, canvas.width / 2, canvas.height / 2 + 30);
+
+            restartBtn.style.display = "inline-block";
+        }
+
+        function restartGame() {
+            score = 0;
+            life = 10;
+            nextBossScore = 50;
+            boss = null;
+            gameOver = false;
+            bullets.length = 0;
+            bossBullets.length = 0;
+            enemies.length = 0;
+            player.x = 280;
+            player.y = 340;
+
+            scoreText.textContent = score;
+            lifeText.textContent = life;
+            restartBtn.style.display = "none";
+
+            gameLoop();
+        }
+
+        restartBtn.addEventListener("click", restartGame);
+
+        function gameLoop() {
+            if(gameOver) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            movePlayer();
+            moveBullets();
+            
+            if (boss) {
+                moveBoss();
+                moveBossBullets();
+                checkBulletBossCollision();
+                checkPlayerBossCollision();
+                checkPlayerBossBulletCollision();
+            } else {
+                moveEnemies();
+                checkBulletEnemyCollision();
+                checkPlayerEnemyCollision();
+            }
+
+            drawPlayer();
+            drawBullet();
+            if (boss) {
+                drawBoss();
+                drawBossBullets();
+            } else {
+                drawEnemies();
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        setInterval(createEnemy, 900);
+        setInterval(shootBossBullet, 800);
+        gameLoop();
+    </script>
+</body>
+
+</html>
